@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Roster">
+<meta name="theme-color" content="#f6f5f2">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>12-Hour Inpatient Roster</title>
+<style>
+:root{
+  --bg:#f6f5f2; --card:#ffffff; --ink:#1d1d1f; --mute:#6b6b70; --line:#e4e2dc; --soft:#efede8;
+  --d-bg:#fbe3a6; --d-ink:#6b4300; --n-bg:#d7dbff; --n-ink:#262b85; --al-bg:#cdeed7; --al-ink:#13532a;
+  --we:#f1eee6; --err:#c62828; --err-bg:#fdecec; --warn:#a15c00; --warn-bg:#fff4df; --ok:#1d7a3e; --ok-bg:#e5f5ea;
+  --accent:#1f4fd1; --ot:#d84315;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141416; --card:#1e1e21; --ink:#ececee; --mute:#9a9aa1; --line:#2f2f34; --soft:#26262a;
+  --d-bg:#5a4207; --d-ink:#ffe2a0; --n-bg:#2b3170; --n-ink:#d7dbff; --al-bg:#1d4a2c; --al-ink:#c9f2d6;
+  --we:#1a1a1d; --err:#ff7a7a; --err-bg:#3a1c1c; --warn:#ffc266; --warn-bg:#3a2c12; --ok:#7fdc9c; --ok-bg:#16301f;
+  --accent:#8fb0ff; --ot:#ff8a65;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left))}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between;margin-bottom:12px}
+h1{font-size:18px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--mute);font-size:12.5px}
+.month{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px}
+.month b{min-width:128px;text-align:center;font-size:14.5px}
+.ib{border:0;background:transparent;width:34px;height:34px;border-radius:9px;font-size:18px}
+.ib:active,.chip:active,.btn:active{transform:scale(.97)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 14px;white-space:nowrap;font-size:14px}
+.tab.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--err);color:#fff;font-size:11px;margin-left:5px;line-height:18px;text-align:center}
+.badge.zero{background:var(--ok)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.status{font-size:13.5px;padding:6px 10px;border-radius:10px}
+.status.ok{background:var(--ok-bg);color:var(--ok)} .status.bad{background:var(--err-bg);color:var(--err)} .status.warn{background:var(--warn-bg);color:var(--warn)}
+.btn{border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:7px 12px;font-size:13.5px}
+.btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.opt{display:flex;align-items:center;gap:4px;font-size:13.5px}
+.scroller{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px;border:1px solid var(--line)}
+table{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:100%}
+th,td{padding:0;text-align:center;border-bottom:1px solid var(--line)}
+thead th{position:sticky;top:0;background:var(--card);z-index:2;font-weight:600;height:40px}
+th.dh{width:31px;min-width:31px;line-height:1.05}
+th.dh small{display:block;font-weight:500;color:var(--mute);font-size:10px}
+.we{background:var(--we)}
+thead th.we{background:var(--we)}
+th.today{box-shadow:inset 0 -3px 0 var(--accent)}
+.nm{position:sticky;left:0;z-index:3;background:var(--card);text-align:left;padding:0 8px;min-width:118px;max-width:118px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--line);height:38px}
+thead .nm{z-index:4}
+.nm .g{color:var(--mute);font-size:10.5px;margin-left:3px}
+.teamhdr td{background:var(--soft);font-size:11.5px;font-weight:600;color:var(--mute);text-align:left;padding:4px 8px;height:auto}
+.teamhdr td.nm{background:var(--soft)}
+td.c{width:31px;min-width:31px;height:38px;position:relative;cursor:pointer;user-select:none}
+.c span{display:flex;align-items:center;justify-content:center;width:26px;height:28px;margin:auto;border-radius:7px;font-weight:700;font-size:12px}
+.s-D span{background:var(--d-bg);color:var(--d-ink)}
+.s-N span{background:var(--n-bg);color:var(--n-ink)}
+.s-AL span{background:var(--al-bg);color:var(--al-ink);font-size:10px}
+.s-O span{color:var(--line);font-weight:400}
+.ot span{box-shadow:0 0 0 2px var(--ot)}
+.x span{outline:2px dashed var(--accent);outline-offset:-2px}
+.lk::after{content:"";position:absolute;top:4px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.st{min-width:40px;font-variant-numeric:tabular-nums;font-size:12px;padding:0 4px}
+.st.h{font-weight:700}
+.pos{color:var(--mute)} .big{color:var(--ot);font-weight:700} .neg{color:var(--err);font-weight:700}
+tfoot td{height:30px;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;background:var(--soft)}
+tfoot td.nm{background:var(--soft);font-weight:600}
+tfoot td.low{color:#fff;background:var(--err)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mute);margin-top:10px}
+.legend i{display:inline-block;width:16px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:4px}
+.hint{font-size:12px;color:var(--mute);margin-top:6px}
+/* day view */
+.days{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:12px;min-width:46px;padding:5px 4px;text-align:center;font-size:12px;line-height:1.15}
+.chip b{display:block;font-size:16px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.we{background:var(--we)} .chip.on.we{background:var(--accent)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.shift{border-radius:12px;padding:10px 12px;margin-top:8px}
+.shift.D{background:var(--d-bg);color:var(--d-ink)} .shift.N{background:var(--n-bg);color:var(--n-ink)}
+.shift h4{margin:0 0 4px;font-size:13px;display:flex;justify-content:space-between}
+.shift ul{margin:0;padding-left:18px} .shift li{margin:2px 0}
+.empty{color:var(--err);font-weight:700}
+/* issues */
+.iss{list-style:none;margin:0;padding:0}
+.iss li{padding:8px 10px;border-radius:9px;margin:6px 0;font-size:13.5px;display:flex;gap:8px}
+.iss .error{background:var(--err-bg);color:var(--err)} .iss .warn{background:var(--warn-bg);color:var(--warn)} .iss .info{background:var(--soft);color:var(--mute)}
+.iss em{font-style:normal;font-weight:700;min-width:46px}
+h3{font-size:15px;margin:2px 0 8px}
+/* settings */
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0}
+.row label{font-size:13.5px;color:var(--mute);min-width:150px}
+select,input[type=text],input[type=number]{font:inherit;font-size:16px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)}
+input[type=number]{width:80px}
+.step{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.step button{border:0;background:var(--soft);width:32px;height:32px;font-size:16px}
+.step b{min-width:30px;text-align:center}
+.nurse{display:grid;grid-template-columns:24px 1fr 74px 92px 30px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.nurse input[type=text]{width:100%}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:var(--card);padding:6px 10px;font-size:13px}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.del{border:0;background:transparent;color:var(--err);font-size:18px}
+/* sheet */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;justify-content:center;z-index:20}
+.mask.open{display:flex}
+.sheet{background:var(--card);width:100%;max-width:440px;border-radius:18px 18px 0 0;padding:16px 16px calc(26px + env(safe-area-inset-bottom))}
+.menu{display:grid;gap:8px}.menu .btn{padding:12px;text-align:left;font-size:15px}
+.sheet h4{margin:0 0 2px;font-size:16px} .sheet p{margin:0 0 12px;color:var(--mute);font-size:13px}
+.choices{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.choices button{border:1px solid var(--line);border-radius:12px;padding:12px 0;font-weight:700;background:var(--soft)}
+.choices .cD{background:var(--d-bg);color:var(--d-ink)} .choices .cN{background:var(--n-bg);color:var(--n-ink)} .choices .cAL{background:var(--al-bg);color:var(--al-ink)}
+.sheet .foot{display:flex;justify-content:space-between;margin-top:12px}
+textarea{width:100%;height:160px;font:12px ui-monospace,monospace;border:1px solid var(--line);border-radius:9px;background:var(--soft);color:var(--ink);padding:8px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+.toast.show{opacity:1}
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  body{background:#fff;color:#000}
+  header .month .ib,.tabs,.bar .opt,.bar button,.btn,.hint,.legend,.toast,.mask{display:none!important}
+  .wrap{padding:0;max-width:none}
+  .card{border:0;padding:0}
+  .scroller{overflow:visible;border:0}
+  table{font-size:9px} th.dh,td.c{width:auto;min-width:0} .nm{position:static;min-width:90px}
+  .c span{width:auto;height:auto;padding:2px 0}
+  .s-D span,.s-N span,.s-AL span,.we,thead th.we,tfoot td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .card+.card{break-before:page}
+  .month{border:0!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>12-Hour Inpatient Roster</h1>
+      <div class="sub">Men's &amp; Women's · <span id="times"></span></div>
+    </div>
+    <div class="month">
+      <button class="ib" id="mPrev" aria-label="Previous month">‹</button>
+      <b id="mLabel"></b>
+      <button class="ib" id="mNext" aria-label="Next month">›</button>
+    </div>
+  </header>
+  <nav class="tabs" id="tabs"></nav>
+  <main id="main"></main>
+</div>
+
+<div class="mask" id="mask"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Roster engine (12h, fixed Day/Night teams) =====
+const Engine = (() => {
+  const WORK = s => s === 'D' || s === 'N';
+
+  function rng(seed) {
+    let a = (seed >>> 0) + 0x9e3779b9;
+    return () => {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const daysIn = (y, m) => new Date(y, m + 1, 0).getDate();
+  const dow = (y, m, d) => new Date(y, m, d + 1).getDay(); // d is 0-based
+  const isWeekend = (y, m, d) => { const w = dow(y, m, d); return w === 5 || w === 6; };
+
+  function targetFor(nurse, cfg, wardLocks, days) {
+    const L = (wardLocks && wardLocks[nurse.id]) || {};
+    let al = 0;
+    for (let d = 0; d < days; d++) if (L[d] === 'AL') al++;
+    const reqHours = Math.max(0, cfg.targetHours - al * cfg.alCredit);
+    return { al, reqHours, shifts: Math.ceil(reqHours / cfg.shiftLen) };
+  }
+
+  function generateWard(ward, cfg, wardLocks, seed) {
+    const R = rng(seed * 7919 + (ward.key === 'men' ? 1 : 2));
+    const days = daysIn(cfg.year, cfg.month);
+    const nurses = ward.nurses.filter(n => n.on);
+    const mc = cfg.maxConsec, bp = cfg.blockPref;
+    const minOf = { D: ward.minD, N: ward.minN };
+    const hasCN = nurses.some(n => /CN/.test(n.grade || ''));
+    const grid = {}, rem = {}, ot = {}, wk = {}, cb = {};
+
+    nurses.forEach(n => {
+      const L = (wardLocks && wardLocks[n.id]) || {};
+      grid[n.id] = Array.from({ length: days }, (_, d) =>
+        L[d] ? { s: L[d], lock: true } : { s: 'O' });
+      const t = targetFor(n, cfg, wardLocks, days);
+      const lockedWork = grid[n.id].filter(c => c.lock && WORK(c.s)).length;
+      rem[n.id] = Math.max(0, t.shifts - lockedWork);
+      ot[n.id] = 0; cb[n.id] = 0;
+      wk[n.id] = grid[n.id].filter((c, d) => WORK(c.s) && isWeekend(cfg.year, cfg.month, d)).length;
+    });
+
+    const cell = (id, d) => (d < 0 || d >= days) ? { s: 'O' } : grid[id][d];
+    const count = (d, T) => nurses.filter(n => grid[n.id][d].s === T).length;
+    const cnOn = (d, T) => nurses.some(n => grid[n.id][d].s === T && /CN/.test(n.grade || ''));
+
+    function canWork(id, d, T) {
+      const c = grid[id][d];
+      if (c.lock || c.s !== 'O') return false;
+      if (T === 'D' && cell(id, d - 1).s === 'N') return false;
+      if (T === 'N' && cell(id, d + 1).s === 'D') return false;
+      let back = 0; for (let k = d - 1; k >= 0 && WORK(grid[id][k].s); k--) back++;
+      let fwd = 0; for (let k = d + 1; k < days && WORK(grid[id][k].s); k++) fwd++;
+      return back + fwd + 1 <= mc;
+    }
+    function freeLeft(id, d) { let f = 0; for (let k = d; k < days; k++) if (!grid[id][k].lock && grid[id][k].s === 'O') f++; return f; }
+    function streakBefore(id, d) { let b = 0; for (let k = d - 1; k >= 0 && WORK(grid[id][k].s); k--) b++; return b; }
+
+    // desired per day per team: min + evenly-spread surplus
+    const desired = { D: [], N: [] };
+    const bal = {};
+    ['D', 'N'].forEach(T => {
+      const team = nurses.filter(n => n.team === T);
+      let need = 0;
+      for (let d = 0; d < days; d++) need += Math.max(0, minOf[T] - count(d, T));
+      bal[T] = team.reduce((a, n) => a + rem[n.id], 0) - need;
+    });
+    ['D', 'N'].forEach(T => {
+      const team = nurses.filter(n => n.team === T);
+      const O = T === 'D' ? 'N' : 'D';
+      // cross-cover mode: keep spare shifts in reserve for the other team's shortfall
+      let reserve = cfg.gapFill === 'cross' ? Math.min(Math.max(0, bal[T]), Math.max(0, -bal[O])) : 0;
+      const E = Math.max(0, bal[T] - reserve);
+      const order = team.slice().sort((a, b) => (rem[b.id] - rem[a.id]) || (R() - 0.5));
+      for (let i = 0; reserve > 0 && order.length; i = (i + 1) % order.length) {
+        const n = order[i]; if (rem[n.id] > 0) { rem[n.id]--; cb[n.id]++; reserve--; }
+      }
+      const phase = R();
+      for (let d = 0; d < days; d++) {
+        const ex = Math.floor((d + 1 + phase) * E / days) - Math.floor((d + phase) * E / days);
+        desired[T][d] = Math.min(team.length, minOf[T] + ex);
+      }
+    });
+
+    const avgWk = () => { const v = nurses.map(n => wk[n.id]); return v.reduce((a, b) => a + b, 0) / (v.length || 1); };
+
+    function assign(id, d, T, flags = {}) {
+      grid[id][d] = Object.assign({ s: T }, flags);
+      if (isWeekend(cfg.year, cfg.month, d)) wk[id]++;
+    }
+
+    for (let d = 0; d < days; d++) {
+      const we = isWeekend(cfg.year, cfg.month, d);
+      for (const T of ['D', 'N']) {
+        const team = nurses.filter(n => n.team === T);
+        const mcCap = mc / (mc + 1);
+        while (true) {
+          const c = count(d, T);
+          const cands = team.filter(n => rem[n.id] > 0 && canWork(n.id, d, T));
+          if (!cands.length) break;
+          const needCN = hasCN && !cnOn(d, T);
+          let best = null, bestScore = -1e9, anyForced = false;
+          const aw = avgWk();
+          for (const n of cands) {
+            const fl = freeLeft(n.id, d);
+            const urg = rem[n.id] / Math.max(0.5, fl * mcCap);
+            const forced = urg >= 1;
+            if (forced) anyForced = true;
+            const st = streakBefore(n.id, d);
+            let s = urg * 2;
+            if (forced) s += 10;
+            if (st > 0 && st < bp) s += 0.6;
+            if (st >= bp) s -= 0.5;
+            if (st === 0 && d >= 2 && WORK(cell(n.id, d - 2).s)) s -= 0.35; // avoid single day off
+            if (we) s -= 0.3 * (wk[n.id] - aw);
+            if (needCN && /CN/.test(n.grade || '')) s += (desired[T][d] - c <= 1 ? 4 : 1.2);
+            s += R() * 0.4;
+            if (s > bestScore) { bestScore = s; best = n; }
+          }
+          if (c >= desired[T][d] && !(anyForced && bestScore >= 10)) break;
+          assign(best.id, d, T);
+          rem[best.id]--;
+        }
+        // gap fill
+        while (count(d, T) < minOf[T]) {
+          const other = nurses.filter(n => n.team !== T);
+          const pools = cfg.gapFill === 'cross'
+            ? [[other, false], [team, true], [other, true]]
+            : [[team, true], [other, false], [other, true]];
+          let done = false;
+          const cc = other.filter(n => cb[n.id] > 0 && canWork(n.id, d, T));
+          if (cc.length) {
+            cc.sort((a, b) => (cb[b.id] - cb[a.id]) || (R() - 0.5));
+            assign(cc[0].id, d, T, { x: true }); cb[cc[0].id]--; continue;
+          }
+          for (const [pool, isOT] of pools) {
+            const c2 = pool.filter(n => (isOT ? rem[n.id] === 0 : rem[n.id] > 0) && canWork(n.id, d, T));
+            if (!c2.length) continue;
+            c2.sort((a, b) => (ot[a.id] - ot[b.id]) || (streakBefore(a.id, d) - streakBefore(b.id, d)) || (R() - 0.5));
+            const n = c2[0];
+            assign(n.id, d, T, { ot: isOT, x: n.team !== T });
+            if (isOT) ot[n.id]++; else rem[n.id]--;
+            done = true; break;
+          }
+          if (!done) break;
+        }
+      }
+    }
+
+    // post-pass: place any leftover shifts on lightest days
+    nurses.forEach(n => { rem[n.id] += cb[n.id]; cb[n.id] = 0; });
+    nurses.forEach(n => {
+      let guard = 0;
+      while (rem[n.id] > 0 && guard++ < 60) {
+        const opts = [];
+        for (let d = 0; d < days; d++) if (canWork(n.id, d, n.team)) opts.push(d);
+        if (!opts.length) break;
+        opts.sort((a, b) => (count(a, n.team) - count(b, n.team)) || (R() - 0.5));
+        assign(n.id, opts[0], n.team);
+        rem[n.id]--;
+      }
+    });
+
+    return grid;
+  }
+
+  function validate(ward, grid, cfg, wardLocks) {
+    const days = daysIn(cfg.year, cfg.month);
+    const nurses = ward.nurses.filter(n => n.on && grid[n.id]);
+    const issues = [];
+    const hasCN = nurses.some(n => /CN/.test(n.grade || ''));
+    const minOf = { D: ward.minD, N: ward.minN };
+    const stats = {};
+    let alone = { D: 0, N: 0 };
+
+    for (let d = 0; d < days; d++) {
+      for (const T of ['D', 'N']) {
+        const on = nurses.filter(n => grid[n.id][d].s === T);
+        if (on.length < minOf[T]) issues.push({ lvl: 'error', d, T, text: `${T === 'D' ? 'Day' : 'Night'} shift has ${on.length}/${minOf[T]} nurses` });
+        if (on.length === 1) alone[T]++;
+        if (hasCN && on.length && !on.some(n => /CN/.test(n.grade || ''))) issues.push({ lvl: 'warn', d, T, text: `No charge nurse on ${T === 'D' ? 'day' : 'night'} shift` });
+      }
+    }
+    nurses.forEach(n => {
+      const row = grid[n.id];
+      let D = 0, N = 0, wkn = 0, otShifts = 0, xs = 0, run = 0, maxRun = 0;
+      for (let d = 0; d < days; d++) {
+        const s = row[d].s;
+        if (s === 'D') D++; if (s === 'N') N++;
+        if ((s === 'D' || s === 'N') && isWeekend(cfg.year, cfg.month, d)) wkn++;
+        if (row[d].ot) otShifts++;
+        if ((s === 'D' || s === 'N') && s !== n.team) xs++;
+        if (s === 'D' || s === 'N') { run++; maxRun = Math.max(maxRun, run); } else run = 0;
+        if (s === 'N' && d + 1 < days && row[d + 1].s === 'D') issues.push({ lvl: 'error', d: d + 1, nurse: n.name, text: `${n.name}: night → day with no rest` });
+      }
+      const t = targetFor(n, cfg, wardLocks, days);
+      const hours = (D + N) * cfg.shiftLen;
+      const diff = hours - t.reqHours;
+      stats[n.id] = { D, N, hours, diff, wkn, req: t.reqHours, al: t.al, maxRun, xs };
+      if (maxRun > cfg.maxConsec) issues.push({ lvl: 'warn', nurse: n.name, text: `${n.name}: ${maxRun} shifts in a row (max ${cfg.maxConsec})` });
+      if (diff < 0) issues.push({ lvl: 'warn', nurse: n.name, text: `${n.name}: ${hours}h — ${-diff}h under ${t.reqHours}h target` });
+      if (diff >= cfg.shiftLen) issues.push({ lvl: 'info', nurse: n.name, text: `${n.name}: overtime ${diff}h (${hours}h vs ${t.reqHours}h)` });
+      if (xs) issues.push({ lvl: 'info', nurse: n.name, text: `${n.name}: ${xs} cross-cover ${n.team === 'D' ? 'night' : 'day'} shift(s)` });
+    });
+    if (alone.N) issues.push({ lvl: 'info', text: `${alone.N} night(s) with a single nurse` });
+    if (alone.D) issues.push({ lvl: 'info', text: `${alone.D} day(s) with a single nurse` });
+    return { issues, stats };
+  }
+
+  return { generateWard, validate, daysIn, dow, isWeekend, targetFor };
+})();
+
+
+</script>
+<script>
+(() => {
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const WD = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const STORE = 'azm-12h-roster-v1';
+
+const DEFAULT_WARDS = () => ([
+  { key:'men', label:"Men's ward", minD:2, minN:2, nurses:[
+    ['awad','Machamp','CN2','D'],['bader','Meowth','CN1','D'],['alganem','Espeon','','D'],['fares','Eevee','CN1','D'],['haitham','Greninja','','D'],
+    ['assaf','Mewtwo','CN2','N'],['ali','Pikachu','CN1','N'],['alm','Squirtle','','N'],['abdulrahman','Gengar','CN2','N']
+  ].map(([id,name,grade,team])=>({id,name,grade,team,on:true})) },
+  { key:'women', label:"Women's ward", minD:1, minN:1, nurses:[
+    ['aysha','Psyduck','','D'],['sara','Sylveon','','D'],['taif','Onix','','D'],
+    ['atheer','Cubone','','N'],['yara','Blastoise','','N'],['lama','Alakazam','','N']
+  ].map(([id,name,grade,team])=>({id,name,grade,team,on:true})) }
+]);
+const DEFAULT_CFG = () => ({ year:2026, month:11, targetHours:176, shiftLen:12, maxConsec:3, blockPref:2, gapFill:'ot', alCredit:8, dayStart:7 });
+
+let S = load() || { cfg:DEFAULT_CFG(), wards:DEFAULT_WARDS(), months:{}, view:'men', selDay:null };
+function load(){ try{ const t=localStorage.getItem(STORE); return t?JSON.parse(t):null; }catch(e){ return null; } }
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){} }
+
+const mk = () => `${S.cfg.year}-${S.cfg.month}`;
+const days = () => Engine.daysIn(S.cfg.year, S.cfg.month);
+const ward = k => S.wards.find(w=>w.key===k);
+function M(){ // month record
+  const k = mk();
+  if (!S.months[k]) S.months[k] = { locks:{men:{},women:{}}, options:[], idx:-1, grids:null };
+  return S.months[k];
+}
+function score(g){ let e=0,w=0,ot=0; S.wards.forEach(wd=>{ const v=Engine.validate(wd,g[wd.key],S.cfg,M().locks[wd.key]); v.issues.forEach(i=>{ if(i.lvl==='error')e++; else if(i.lvl==='warn')w++; }); Object.values(v.stats).forEach(s=>{ if(s.diff>=S.cfg.shiftLen) ot+=s.diff; }); }); return e*1000+w*10+ot/100; }
+function build(seed){ const g={}; S.wards.forEach(wd=>{ g[wd.key]=Engine.generateWard(wd,S.cfg,M().locks[wd.key],seed); }); return g; }
+function findOption(start){
+  let best=null,bs=1e9;
+  for(let s=start;s<start+40;s++){ const g=build(s); const sc=score(g); if(sc<bs){bs=sc;best={seed:s,g};} if(sc<1) break; }
+  return best;
+}
+function newOption(){
+  const m=M(); const last=m.options.length?Math.max(...m.options)+1:1;
+  const o=findOption(last); m.options.push(o.seed); m.idx=m.options.length-1; m.grids=o.g; save();
+}
+function rebuildCurrent(){ // keep current seed, re-apply settings + locks
+  const m=M(); if(m.idx<0){ newOption(); return; }
+  m.grids=build(m.options[m.idx]); save();
+}
+function ensure(){ const m=M(); if(!m.grids) newOption();
+  // keep grids in sync with nurse list
+  S.wards.forEach(w=>{ const g=m.grids[w.key]||{}; if(w.nurses.some(n=>n.on&&!g[n.id])||Object.keys(g).some(id=>!w.nurses.find(n=>n.id===id&&n.on))) rebuildCurrent(); });
+}
+
+// ---------- render ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtH = h => String(h%24).padStart(2,'0')+':00';
+function allIssues(){ const m=M(); const out={}; S.wards.forEach(w=>out[w.key]=Engine.validate(w,m.grids[w.key],S.cfg,m.locks[w.key])); return out; }
+
+function render(){
+  ensure();
+  $('#mLabel').textContent = `${MONTHS[S.cfg.month]} ${S.cfg.year}`;
+  const ds=S.cfg.dayStart; $('#times').textContent = `Day ${fmtH(ds)}–${fmtH(ds+12)} · Night ${fmtH(ds+12)}–${fmtH(ds)}`;
+  const V=allIssues();
+  const cnt=k=>V[k].issues.filter(i=>i.lvl!=='info').length;
+  const total=cnt('men')+cnt('women');
+  const tabs=[['men',"Men's",cnt('men')],['women',"Women's",cnt('women')],['day','By day',null],['issues','Problems',total],['settings','Options',null]];
+  $('#tabs').innerHTML = tabs.map(([k,l,c])=>`<button class="tab ${S.view===k?'on':''}" data-v="${k}">${l}${c===null?'':`<span class="badge ${c?'':'zero'}">${c||'✓'}</span>`}</button>`).join('');
+  const main=$('#main');
+  if(S.view==='print') main.innerHTML=rosterView('men',V.men)+rosterView('women',V.women);
+  else if(S.view==='men'||S.view==='women') main.innerHTML=rosterView(S.view,V[S.view]);
+  else if(S.view==='day') main.innerHTML=dayView();
+  else if(S.view==='issues') main.innerHTML=issuesView(V);
+  else main.innerHTML=settingsView();
+}
+
+function optionBar(){
+  const m=M();
+  return `<div class="opt"><button class="ib" data-a="optPrev" ${m.idx<=0?'disabled style="opacity:.3"':''} aria-label="Previous option">‹</button>
+  <span>Option <b>${m.idx+1}</b>/${m.options.length}</span>
+  <button class="ib" data-a="optNext" aria-label="Next option">›</button></div>`;
+}
+
+function rosterView(k,v){
+  const w=ward(k), m=M(), g=m.grids[k], n=days(), y=S.cfg.year, mo=S.cfg.month;
+  const errs=v.issues.filter(i=>i.lvl==='error').length, warns=v.issues.filter(i=>i.lvl==='warn').length;
+  const L=S.cfg.shiftLen, xs=Object.values(v.stats).reduce((a,s)=>a+Math.max(0,s.hours-Math.ceil(s.req/L)*L),0)/L;
+  const st = errs?`<span class="status bad">✕ ${errs} coverage/rest problem${errs>1?'s':''}</span>`:warns?`<span class="status warn">⚠ ${warns} warning${warns>1?'s':''}</span>`:`<span class="status ok">✓ All shifts covered · min ${w.minD} day / ${w.minN} night</span>`;
+  const today=new Date(); const tIdx=(today.getFullYear()===y&&today.getMonth()===mo)?today.getDate()-1:-1;
+  let h=`<div class="card"><div class="bar">${st}${optionBar()}</div>
+  <div class="bar" style="margin-bottom:8px"><span class="sub">Base ${Math.ceil(S.cfg.targetHours/L)} × ${L}h = ${Math.ceil(S.cfg.targetHours/L)*L}h each (target ${S.cfg.targetHours}h)${xs?` · <b style="color:var(--ot)">${xs} extra OT shift${xs>1?'s':''} (${xs*L}h)</b>`:' · no extra OT'}</span>
+  <span style="display:flex;gap:6px"><button class="btn" data-a="rebuild">Rebuild</button><button class="btn pri" data-a="export">Share / Export</button></span></div>
+  <div class="scroller"><table><thead><tr><th class="nm">${esc(w.label)}</th>`;
+  for(let d=0;d<n;d++){ const we=Engine.isWeekend(y,mo,d); h+=`<th class="dh ${we?'we':''} ${d===tIdx?'today':''}">${d+1}<small>${WD[Engine.dow(y,mo,d)]}</small></th>`; }
+  h+=`<th class="st">D</th><th class="st">N</th><th class="st">Hrs</th><th class="st">±${S.cfg.targetHours}</th></tr></thead><tbody>`;
+  for(const T of ['D','N']){
+    const team=w.nurses.filter(x=>x.on&&x.team===T);
+    if(!team.length) continue;
+    h+=`<tr class="teamhdr"><td class="nm">${T==='D'?'☀ Day team':'☾ Night team'}</td><td colspan="${n+4}"></td></tr>`;
+    for(const nu of team){
+      const row=g[nu.id], s=v.stats[nu.id];
+      h+=`<tr><td class="nm">${esc(nu.name)}${nu.grade?`<span class="g">${esc(nu.grade)}</span>`:''}</td>`;
+      for(let d=0;d<n;d++){ const c=row[d]; const we=Engine.isWeekend(y,mo,d);
+        const lab=c.s==='O'?'·':c.s;
+        h+=`<td class="c s-${c.s} ${c.ot?'ot':''} ${(c.s==='D'||c.s==='N')&&c.s!==nu.team?'x':''} ${c.lock?'lk':''} ${we?'we':''}" data-w="${k}" data-n="${nu.id}" data-d="${d}"><span>${lab}</span></td>`; }
+      const cls=s.diff<0?'neg':s.diff>=S.cfg.shiftLen?'big':'pos';
+      h+=`<td class="st">${s.D}</td><td class="st">${s.N}</td><td class="st h">${s.hours}</td><td class="st ${cls}">${s.diff>0?'+':''}${s.diff}</td></tr>`;
+    }
+  }
+  h+=`</tbody><tfoot>`;
+  for(const T of ['D','N']){
+    const min=T==='D'?w.minD:w.minN;
+    h+=`<tr><td class="nm">${T==='D'?'Day on duty':'Night on duty'}</td>`;
+    for(let d=0;d<n;d++){ const c=w.nurses.filter(x=>x.on&&g[x.id]&&g[x.id][d].s===T).length; h+=`<td class="${c<min?'low':''}">${c}</td>`; }
+    h+=`<td colspan="4"></td></tr>`;
+  }
+  h+=`</tfoot></table></div>
+  <div class="legend"><span><i style="background:var(--d-bg)"></i>Day 12h</span><span><i style="background:var(--n-bg)"></i>Night 12h</span><span><i style="background:var(--al-bg)"></i>Annual leave</span><span><i style="box-shadow:0 0 0 2px var(--ot)"></i>Overtime shift</span><span><i style="outline:2px dashed var(--accent);outline-offset:-2px"></i>Cross-cover</span><span><i style="background:var(--we)"></i>Fri/Sat</span><span>● edited (kept on rebuild)</span></div>
+  <div class="hint">Tap any cell to change it. Edits and leave stay fixed when you rebuild or flip options; everything else re-balances to hit ${S.cfg.targetHours}h.</div></div>`;
+  return h;
+}
+
+function dayView(){
+  const n=days(), y=S.cfg.year, mo=S.cfg.month, m=M();
+  if(S.selDay==null||S.selDay>=n){ const t=new Date(); S.selDay=(t.getFullYear()===y&&t.getMonth()===mo)?t.getDate()-1:0; }
+  const d=S.selDay, ds=S.cfg.dayStart;
+  let h=`<div class="card"><div class="days" id="dayStrip">`;
+  for(let i=0;i<n;i++) h+=`<button class="chip ${i===d?'on':''} ${Engine.isWeekend(y,mo,i)?'we':''}" data-day="${i}">${WD[Engine.dow(y,mo,i)]}<b>${i+1}</b></button>`;
+  h+=`</div><h3>${WD[Engine.dow(y,mo,d)]} ${d+1} ${MONTHS[mo]} ${y}</h3><div class="grid2">`;
+  for(const w of S.wards){
+    h+=`<div><b>${esc(w.label)}</b>`;
+    for(const T of ['D','N']){
+      const on=w.nurses.filter(x=>x.on&&m.grids[w.key][x.id]&&m.grids[w.key][x.id][d].s===T);
+      const min=T==='D'?w.minD:w.minN;
+      const tm=T==='D'?`${fmtH(ds)}–${fmtH(ds+12)}`:`${fmtH(ds+12)}–${fmtH(ds)}`;
+      h+=`<div class="shift ${T}"><h4><span>${T==='D'?'☀ Day':'☾ Night'} · ${tm}</span><span>${on.length}/${min}</span></h4>`;
+      h+= on.length?`<ul>${on.map(x=>{const c=m.grids[w.key][x.id][d];return `<li>${esc(x.name)}${x.grade?` (${esc(x.grade)})`:''}${c.ot?' — OT':''}${x.team!==T?' — cross-cover':''}</li>`}).join('')}</ul>`:`<div class="empty">Nobody rostered</div>`;
+      h+=`</div>`;
+    }
+    const al=w.nurses.filter(x=>x.on&&m.grids[w.key][x.id]&&m.grids[w.key][x.id][d].s==='AL');
+    if(al.length) h+=`<div class="hint">On leave: ${al.map(x=>esc(x.name)).join(', ')}</div>`;
+    h+=`</div>`;
+  }
+  return h+`</div></div>`;
+}
+
+function issuesView(V){
+  const mo=S.cfg.month;
+  let h='';
+  for(const w of S.wards){
+    const list=V[w.key].issues.slice().sort((a,b)=>({error:0,warn:1,info:2}[a.lvl]-{error:0,warn:1,info:2}[b.lvl]));
+    h+=`<div class="card"><h3>${esc(w.label)}</h3>`;
+    if(!list.some(i=>i.lvl!=='info')) h+=`<div class="status ok" style="display:inline-block;margin-bottom:6px">✓ No problems — every shift covered, rest rules OK</div>`;
+    h+=`<ul class="iss">${list.map(i=>`<li class="${i.lvl}"><em>${i.d!=null?`${i.d+1} ${MONTHS[mo].slice(0,3)}`:i.lvl==='info'?'Info':'Month'}</em><span>${esc(i.text)}</span></li>`).join('')}</ul></div>`;
+  }
+  h+=`<div class="card hint" style="margin-top:0">Checks: minimum cover on every shift · no night→day without rest · max ${S.cfg.maxConsec} shifts in a row · hours vs ${S.cfg.targetHours}h · a charge nurse (CN1/CN2) on every men's shift.</div>`;
+  return h;
+}
+
+function stepper(a,val){ return `<span class="step"><button data-a="${a}" data-dv="-1">−</button><b>${val}</b><button data-a="${a}" data-dv="1">+</button></span>`; }
+function settingsView(){
+  const c=S.cfg;
+  let h=`<div class="card"><h3>Rules</h3>
+  <div class="row"><label>Monthly target hours</label>${stepper('tgt',c.targetHours)}<span class="sub">→ ${Math.ceil(c.targetHours/c.shiftLen)} shifts = ${Math.ceil(c.targetHours/c.shiftLen)*c.shiftLen}h</span></div>
+  <div class="row"><label>Shift start (day)</label><span class="seg">${[6,7,8].map(x=>`<button data-a="start" data-val="${x}" class="${c.dayStart===x?'on':''}">${fmtH(x)}</button>`).join('')}</span></div>
+  <div class="row"><label>Max shifts in a row</label><span class="seg">${[2,3,4].map(x=>`<button data-a="mc" data-val="${x}" class="${c.maxConsec===x?'on':''}">${x}</button>`).join('')}</span></div>
+  <div class="row"><label>Preferred block</label><span class="seg">${[1,2,3].map(x=>`<button data-a="bp" data-val="${x}" class="${c.blockPref===x?'on':''}">${x} on</button>`).join('')}</span></div>
+  <div class="row"><label>If a shift is short</label><span class="seg"><button data-a="gap" data-val="ot" class="${c.gapFill==='ot'?'on':''}">Overtime (same team)</button><button data-a="gap" data-val="cross" class="${c.gapFill==='cross'?'on':''}">Cross-cover first</button></span></div>
+  <div class="row"><label>Leave credit per AL day</label><span class="seg">${[0,8,12].map(x=>`<button data-a="alc" data-val="${x}" class="${c.alCredit===x?'on':''}">${x}h</button>`).join('')}</span></div>
+  </div>`;
+  for(const w of S.wards){
+    h+=`<div class="card"><h3>${esc(w.label)}</h3>
+    <div class="row"><label>Min nurses — day</label>${stepper('minD:'+w.key,w.minD)}</div>
+    <div class="row"><label>Min nurses — night</label>${stepper('minN:'+w.key,w.minN)}</div>
+    <div class="sub" style="margin:8px 0 2px">Staff (tick = on roster · team · grade)</div>`;
+    w.nurses.forEach(nu=>{
+      h+=`<div class="nurse"><input type="checkbox" ${nu.on?'checked':''} data-a="on" data-w="${w.key}" data-n="${nu.id}">
+      <input type="text" value="${esc(nu.name)}" data-a="name" data-w="${w.key}" data-n="${nu.id}">
+      <select data-a="grade" data-w="${w.key}" data-n="${nu.id}">${['','CN1','CN2'].map(gr=>`<option ${nu.grade===gr?'selected':''} value="${gr}">${gr||'—'}</option>`).join('')}</select>
+      <span class="seg"><button data-a="team" data-val="D" data-w="${w.key}" data-n="${nu.id}" class="${nu.team==='D'?'on':''}">Day</button><button data-a="team" data-val="N" data-w="${w.key}" data-n="${nu.id}" class="${nu.team==='N'?'on':''}">Night</button></span>
+      <button class="del" data-a="del" data-w="${w.key}" data-n="${nu.id}" aria-label="Remove">×</button></div>`;
+    });
+    h+=`<div class="row"><button class="btn" data-a="add" data-w="${w.key}">+ Add nurse</button></div></div>`;
+  }
+  h+=`<div class="card"><div class="row"><button class="btn" data-a="clearLocks">Clear all edits this month</button><button class="btn" data-a="reset">Reset everything</button></div>
+  <div class="hint">Any change here rebuilds the roster automatically (your edits and leave stay).</div></div>`;
+  return h;
+}
+
+// ---------- sheet ----------
+function openSheet(html){ $('#sheet').innerHTML=html; $('#mask').classList.add('open'); }
+function closeSheet(){ $('#mask').classList.remove('open'); }
+$('#mask').addEventListener('click',e=>{ if(e.target.id==='mask') closeSheet(); });
+
+function cellSheet(k,id,d){
+  const w=ward(k), nu=w.nurses.find(x=>x.id===id), y=S.cfg.year, mo=S.cfg.month;
+  const c=M().grids[k][id][d];
+  openSheet(`<h4>${esc(nu.name)}</h4><p>${WD[Engine.dow(y,mo,d)]} ${d+1} ${MONTHS[mo]} · now: <b>${{D:'Day',N:'Night',O:'Off',AL:'Leave'}[c.s]}</b>${c.lock?' · edited':''}</p>
+  <div class="choices"><button class="cD" data-set="D">Day</button><button class="cN" data-set="N">Night</button><button data-set="O">Off</button><button class="cAL" data-set="AL">Leave</button></div>
+  <div class="foot"><button class="btn" data-set="unlock" ${c.lock?'':'disabled style="opacity:.4"'}>Undo edit</button><button class="btn" data-set="close">Close</button></div>`);
+  $('#sheet').onclick=e=>{
+    const b=e.target.closest('[data-set]'); if(!b) return; const v=b.dataset.set;
+    if(v==='close'){ closeSheet(); return; }
+    const m=M(); m.locks[k][id]=m.locks[k][id]||{};
+    if(v==='unlock'){ delete m.locks[k][id][d]; m.grids[k][id][d]={s:c.s}; }
+    else { m.locks[k][id][d]=v; m.grids[k][id][d]={s:v,lock:true}; }
+    save(); closeSheet(); render();
+    if(v==='AL') toast('Leave set — tap Rebuild to rebalance hours');
+  };
+}
+
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2200); }
+
+function csv(){
+  const m=M(), n=days(), lines=[];
+  for(const w of S.wards){
+    const V=Engine.validate(w,m.grids[w.key],S.cfg,m.locks[w.key]);
+    lines.push([w.label+' — '+MONTHS[S.cfg.month]+' '+S.cfg.year].join(','));
+    lines.push(['Name','Grade','Team',...Array.from({length:n},(_,i)=>i+1),'D','N','Hours','Diff'].join(','));
+    w.nurses.filter(x=>x.on).forEach(x=>{ const s=V.stats[x.id]; lines.push([`"${x.name}"`,x.grade,x.team,...m.grids[w.key][x.id].map(c=>c.s==='O'?'O':c.s+(c.ot?'+OT':'')),s.D,s.N,s.hours,s.diff].join(',')); });
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function download(name,text,type){
+  try{ const blob=new Blob([text],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1500); return true; }catch(e){ return false; }
+}
+function fileBase(){ return `roster-${S.cfg.year}-${String(S.cfg.month+1).padStart(2,'0')}`; }
+function exportMenu(){
+  openSheet(`<h4>Share / Export</h4><p>${MONTHS[S.cfg.month]} ${S.cfg.year} · both wards</p>
+  <div class="menu">
+    <button class="btn" data-x="print">🖨 Print / Save as PDF</button>
+    <button class="btn" data-x="dl">⬇︎ Download CSV (Excel)</button>
+    <button class="btn" data-x="copy">📋 Copy CSV</button>
+    <button class="btn" data-x="backup">💾 Backup everything (.json)</button>
+    <label class="btn" style="display:block">📂 Restore from backup<input type="file" accept=".json,application/json" data-x="restore" style="display:none"></label>
+  </div><div class="foot"><span></span><button class="btn" data-x="close">Close</button></div>`);
+  const sh=$('#sheet');
+  sh.onclick=e=>{ const b=e.target.closest('[data-x]'); if(!b||b.tagName==='INPUT') return; const x=b.dataset.x;
+    if(x==='close'){ closeSheet(); return; }
+    if(x==='print'){ closeSheet(); const v=S.view; S.view='print'; render(); const back=()=>{ S.view=v; render(); window.removeEventListener('afterprint',back); }; window.addEventListener('afterprint',back); setTimeout(()=>{ try{ window.print(); }catch(err){ toast('Printing not available here'); } setTimeout(()=>{ if(S.view==='print') back(); },1500); },250); return; }
+    if(x==='dl'){ download(fileBase()+'.csv','\ufeff'+csv(),'text/csv;charset=utf-8')?toast('CSV downloaded'):toast('Download blocked'); closeSheet(); return; }
+    if(x==='copy'){ const t=csv(); (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Copied'),()=>toast('Copy blocked')); closeSheet(); return; }
+    if(x==='backup'){ download(fileBase()+'-backup.json',JSON.stringify(S),'application/json')?toast('Backup saved to Files'):toast('Download blocked'); closeSheet(); return; }
+  };
+  sh.onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const r=new FileReader();
+    r.onload=()=>{ try{ const o=JSON.parse(r.result); if(!o.cfg||!o.wards) throw 0; S=o; save(); closeSheet(); render(); toast('Restored'); }catch(err){ toast('Not a valid backup file'); } };
+    r.readAsText(f); };
+}
+
+// ---------- events ----------
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-v],[data-a],[data-day],td.c,#mPrev,#mNext'); if(!t) return;
+  if(t.id==='mPrev'||t.id==='mNext'){ let m=S.cfg.month+(t.id==='mNext'?1:-1), y=S.cfg.year; if(m<0){m=11;y--;} if(m>11){m=0;y++;} S.cfg.month=m; S.cfg.year=y; S.selDay=null; save(); render(); return; }
+  if(t.dataset.v){ S.view=t.dataset.v; save(); render(); return; }
+  if(t.dataset.day){ S.selDay=+t.dataset.day; save(); render(); const el=document.querySelector('.chip.on'); el&&el.scrollIntoView({inline:'center',block:'nearest'}); return; }
+  if(t.matches('td.c')){ cellSheet(t.dataset.w,t.dataset.n,+t.dataset.d); return; }
+  const a=t.dataset.a; if(!a||t.tagName==='INPUT'||t.tagName==='SELECT') return;
+  const m=M(); const w=t.dataset.w&&ward(t.dataset.w); const nu=w&&w.nurses.find(x=>x.id===t.dataset.n);
+  const dv=+t.dataset.dv||0, val=t.dataset.val;
+  let rebuild=true;
+  switch(a){
+    case 'optPrev': if(m.idx>0){ m.idx--; m.grids=build(m.options[m.idx]); } break;
+    case 'optNext': if(m.idx<m.options.length-1){ m.idx++; m.grids=build(m.options[m.idx]); } else newOption(); toast(`Option ${m.idx+1}`); break;
+    case 'rebuild': rebuildCurrent(); toast('Rebuilt — edits kept'); rebuild=false; break;
+    case 'export': exportMenu(); return;
+    case 'csv': { const txt=csv(); const done=()=>toast('Copied — paste into Excel/Sheets');
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done,()=>openSheet(`<h4>Copy CSV</h4><p>Select all and copy</p><textarea>${esc(txt)}</textarea><div class="foot"><span></span><button class="btn" onclick="document.getElementById('mask').classList.remove('open')">Close</button></div>`));
+      else openSheet(`<h4>Copy CSV</h4><textarea>${esc(txt)}</textarea>`);
+      return; }
+    case 'tgt': S.cfg.targetHours=Math.max(12,S.cfg.targetHours+dv*4); break;
+    case 'start': S.cfg.dayStart=+val; rebuild=false; break;
+    case 'mc': S.cfg.maxConsec=+val; break;
+    case 'bp': S.cfg.blockPref=+val; break;
+    case 'gap': S.cfg.gapFill=val; break;
+    case 'alc': S.cfg.alCredit=+val; break;
+    case 'team': nu.team=val; break;
+    case 'del': w.nurses=w.nurses.filter(x=>x!==nu); break;
+    case 'add': { const id='n'+Date.now().toString(36); w.nurses.push({id,name:'New nurse',grade:'',team:'D',on:true}); break; }
+    case 'clearLocks': m.locks={men:{},women:{}}; toast('Edits cleared'); break;
+    case 'reset': S={cfg:DEFAULT_CFG(),wards:DEFAULT_WARDS(),months:{},view:'settings',selDay:null}; save(); render(); toast('Reset to defaults'); return;
+    default:
+      if(a.startsWith('minD:')||a.startsWith('minN:')){ const [f,k]=a.split(':'); const wd=ward(k); wd[f]=Math.max(0,Math.min(6,wd[f]+dv)); break; }
+      return;
+  }
+  if(rebuild&&!['optPrev','optNext'].includes(a)) rebuildCurrent();
+  save(); render();
+});
+document.addEventListener('change',e=>{
+  const t=e.target, a=t.dataset.a; if(!a) return;
+  const w=ward(t.dataset.w), nu=w&&w.nurses.find(x=>x.id===t.dataset.n); if(!nu) return;
+  if(a==='on') nu.on=t.checked;
+  if(a==='name') nu.name=t.value.trim()||nu.name;
+  if(a==='grade') nu.grade=t.value;
+  if(a!=='name') rebuildCurrent();
+  save(); render();
+});
+
+render();
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+})();
+</script>
+</body>
+</html>

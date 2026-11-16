@@ -1220,7 +1220,7 @@ document.addEventListener('input',e=>{ const t=e.target;
   if(t.dataset.chg==='name'){ const nu=ward(t.dataset.w).nurses.find(x=>x.id===t.dataset.n); nu.name=t.value; save(); }
 });
 document.addEventListener('change',e=>{ const t=e.target, c=t.dataset.chg; if(!c) return;
-  if(c==='restore'){ const f=t.files&&t.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const o=JSON.parse(r.result); if(!o.cfg||!o.wards) throw 0; const lang=S.lang; S=migrate(o); if(!o.lang) S.lang=lang; save(); render(); toast(L().restored); }catch(err){ toast(L().badFile); } }; r.readAsText(f); return; }
+  if(c==='restore'){ const f=t.files&&t.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const o=JSON.parse(r.result); if(!o.cfg||!o.wards) throw 0; const lang=S.lang, view=S.view; S=migrate(o); S.lang=lang; S.view=view; save(); render(); toast(L().restored); }catch(err){ toast(L().badFile); } }; r.readAsText(f); return; }
   const nu=ward(t.dataset.w).nurses.find(x=>x.id===t.dataset.n);
   if(c==='on'){ nu.on=t.checked; refresh(); }
   if(c==='grade'){ nu.grade=t.value; }

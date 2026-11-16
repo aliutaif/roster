@@ -401,17 +401,19 @@ const STORE = 'azm-12h-roster-v1';
 
 const DEFAULT_WARDS = () => ([
   { key:'men', label:"Men's ward", minD:2, minN:2, nurses:[
-    ['awad','ماجد','CN2','D'],['bader','عدنان','CN1','D'],['alganem','سندباد','','D'],['fares','كونان','CN1','D'],['haitham','غون','','D'],
-    ['assaf','غرندايزر','CN2','N'],['ali','ماوكلي','CN1','N'],['alm','أغومون','','N'],['abdulrahman','هامتارو','CN2','N']
+    ['n1','ماجد','CN2','D'],['n2','عدنان','CN1','D'],['n3','سندباد','','D'],['n4','كونان','CN1','D'],['n5','غون','','D'],
+    ['n6','غرندايزر','CN2','N'],['n7','ماوكلي','CN1','N'],['n8','أغومون','','N'],['n9','هامتارو','CN2','N']
   ].map(([id,name,grade,team])=>({id,name,grade,team,on:true})) },
   { key:'women', label:"Women's ward", minD:1, minN:1, nurses:[
-    ['aysha','لينا','','D'],['sara','سالي','','D'],['taif','ران','','D'],
-    ['atheer','ريمي','','N'],['yara','زينة','','N'],['lama','نحول','','N']
+    ['n10','لينا','','D'],['n11','سالي','','D'],['n12','ران','','D'],
+    ['n13','ريمي','','N'],['n14','زينة','','N'],['n15','نحول','','N']
   ].map(([id,name,grade,team])=>({id,name,grade,team,on:true})) }
 ]);
 const DEFAULT_CFG = () => ({ year:2026, month:11, targetHours:176, shiftLen:12, maxConsec:3, blockPref:2, gapFill:'ot', alCredit:8, dayStart:7 });
 
-let S = load() || { cfg:DEFAULT_CFG(), wards:DEFAULT_WARDS(), months:{}, view:'men', selDay:null };
+const MIG={"Majid": "ماجد", "Adnan": "عدنان", "Sinbad": "سندباد", "Conan": "كونان", "Gon": "غون", "Grendizer": "غرندايزر", "Mowgli": "ماوكلي", "Agumon": "أغومون", "Hamtaro": "هامتارو", "Lina": "لينا", "Sally": "سالي", "Ran": "ران", "Remi": "ريمي", "Zina": "زينة", "Nahool": "نحول", "Machamp": "ماجد", "Meowth": "عدنان", "Espeon": "سندباد", "Eevee": "كونان", "Greninja": "غون", "Mewtwo": "غرندايزر", "Pikachu": "ماوكلي", "Squirtle": "أغومون", "Gengar": "هامتارو", "Psyduck": "لينا", "Sylveon": "سالي", "Onix": "ران", "Cubone": "ريمي", "Blastoise": "زينة", "Alakazam": "نحول"};
+let S = (load()&&migrate(load())) || { cfg:DEFAULT_CFG(), wards:DEFAULT_WARDS(), months:{}, view:'men', selDay:null };
+function migrate(o){ try{ (o.wards||[]).forEach(w=>w.nurses.forEach(n=>{ if(MIG[n.name]) n.name=MIG[n.name]; })); }catch(e){} return o; }
 function load(){ try{ const t=localStorage.getItem(STORE); return t?JSON.parse(t):null; }catch(e){ return null; } }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){} }
 
@@ -520,8 +522,7 @@ function rosterView(k,v){
   let h=`<div class="card"><div class="bar">${st}${optionBar()}</div>
   <div class="bar" style="margin-bottom:8px"><span class="sub">Base ${Math.ceil(S.cfg.targetHours/L)} × ${L}h = ${Math.ceil(S.cfg.targetHours/L)*L}h each (target ${S.cfg.targetHours}h)${xs?` · <b style="color:var(--ot)">${xs} extra OT shift${xs>1?'s':''} (${xs*L}h)</b>`:' · no extra OT'}</span>
   <span style="display:flex;gap:6px"><button class="btn" data-a="rebuild">Rebuild</button><button class="btn pri" data-a="export">Share / Export</button></span></div>`;
-  h+=layoutSeg();
-  const mode=S.view==='print'?'wide':(S.cfg.layout||'month');
+  const mode='wide';
   if(mode==='wide'){ h+=`<div class="scroller">`+gridTable(k,v,0,n,true,false)+`</div>`; }
   else {
     const per=mode==='half'?Math.ceil(n/2):n;
@@ -658,7 +659,7 @@ function exportMenu(){
     if(x==='backup'){ download(fileBase()+'-backup.json',JSON.stringify(S),'application/json')?toast('Backup saved to Files'):toast('Download blocked'); closeSheet(); return; }
   };
   sh.onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const r=new FileReader();
-    r.onload=()=>{ try{ const o=JSON.parse(r.result); if(!o.cfg||!o.wards) throw 0; S=o; save(); closeSheet(); render(); toast('Restored'); }catch(err){ toast('Not a valid backup file'); } };
+    r.onload=()=>{ try{ const o=JSON.parse(r.result); if(!o.cfg||!o.wards) throw 0; S=migrate(o); save(); closeSheet(); render(); toast('Restored'); }catch(err){ toast('Not a valid backup file'); } };
     r.readAsText(f); };
 }
 

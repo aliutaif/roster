@@ -93,6 +93,17 @@ table.fit{table-layout:fixed;width:100%;min-width:0}
 .fit .teamhdr td{padding:3px 6px;font-size:10.5px}
 .fit .lk::after{top:3px;right:2px;width:4px;height:4px}
 .fit .ot span{box-shadow:inset 0 0 0 2px var(--ot)}
+.pcards{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin:0 -2px 4px;scrollbar-width:none;scroll-snap-type:x proximity}
+.pcards::-webkit-scrollbar{display:none}
+.pcard{flex:0 0 150px;scroll-snap-align:start;text-align:left;border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:10px 11px;position:relative;line-height:1.25}
+.pcard.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.pno{position:absolute;top:9px;right:10px;width:22px;height:22px;border-radius:50%;background:var(--soft);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.pcard.on .pno{background:var(--accent);color:#fff}
+.pname{font-weight:700;font-size:14px;padding-right:24px}
+.psub{font-size:12px;color:var(--mute);margin:1px 0 6px}
+.pstat{font-size:11.5px;color:var(--ink)} .pstat b{font-size:16px}
+.pfoot{font-size:11.5px;margin-top:5px} .pok{color:var(--ok);font-weight:600} .pbad{color:var(--err);font-weight:600}
+.pnote{font-size:10.5px;color:var(--mute);margin-top:4px}
 /* day view */
 .days{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
@@ -202,6 +213,7 @@ const Engine = (() => {
   }
 
   function generateWard(ward, cfg, wardLocks, seed) {
+    if (cfg.block) return patternWard(ward, cfg, wardLocks, seed);
     const R = rng(seed * 7919 + (ward.key === 'men' ? 1 : 2));
     const days = daysIn(cfg.year, cfg.month);
     const nurses = ward.nurses.filter(n => n.on);
@@ -345,6 +357,126 @@ const Engine = (() => {
     return grid;
   }
 
+
+  // ===== Block-pattern generator: B on / ~B off, staggered across the team =====
+  function patternWard(ward, cfg, wardLocks, seed) {
+    const R = rng(seed * 104729 + (ward.key === 'men' ? 11 : 22));
+    const days = daysIn(cfg.year, cfg.month);
+    const nurses = ward.nurses.filter(n => n.on);
+    const B = cfg.block, mc = cfg.maxConsec, minOff = cfg.minOff || 2;
+    const minOf = { D: ward.minD, N: ward.minN };
+    const hasCN = nurses.some(n => /CN/.test(n.grade || ''));
+    const grid = {}, tgt = {}, ot = {};
+    nurses.forEach(n => {
+      const L = (wardLocks && wardLocks[n.id]) || {};
+      grid[n.id] = Array.from({ length: days }, (_, d) => L[d] ? { s: L[d], lock: true } : { s: 'O' });
+      tgt[n.id] = targetFor(n, cfg, wardLocks, days).shifts; ot[n.id] = 0;
+    });
+    const W = (id, d) => d >= 0 && d < days && WORK(grid[id][d].s);
+    const count = (d, T) => nurses.filter(n => grid[n.id][d].s === T).length;
+    const shifts = id => grid[id].filter(c => WORK(c.s)).length;
+    const runAt = (id, d) => { let b = 0, f = 0; for (let k = d - 1; k >= 0 && W(id, k); k--) b++; for (let k = d + 1; k < days && W(id, k); k++) f++; return b + f + 1; };
+    const offLen = (id, d, dir) => { let o = 0; for (let k = d + dir; k >= 0 && k < days && !W(id, k); k += dir) o++; return o; };
+    const restOK = (id, d, T) => !(T === 'D' && d > 0 && grid[id][d - 1].s === 'N') && !(T === 'N' && d + 1 < days && grid[id][d + 1].s === 'D');
+    const canAdd = (id, d, T, lim) => !grid[id][d].lock && grid[id][d].s === 'O' && runAt(id, d) <= lim && restOK(id, d, T);
+
+    ['D', 'N'].forEach(T => {
+      const team = nurses.filter(n => n.team === T);
+      if (!team.length) return;
+      for (let i = team.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [team[i], team[j]] = [team[j], team[i]]; }
+      const avgT = team.reduce((a, n) => a + tgt[n.id], 0) / team.length || 1;
+      const O = Math.max(minOff, Math.round(B * days / avgT) - B);
+      const C = B + O, phase = Math.floor(R() * C);
+      // pair nurses on identical offsets when the team exactly matches the minimum ratio (cleaner handovers)
+      team.forEach((n, i) => {
+        const off = (Math.round(i * C / team.length) + phase) % C;
+        for (let d = 0; d < days; d++) if (!grid[n.id][d].lock && ((d - off) % C + C) % C < B) grid[n.id][d] = { s: T };
+      });
+      // trim surplus: remove block-edge shifts on over-covered days
+      for (let guard = 0; guard < 400; guard++) {
+        const over = team.filter(n => shifts(n.id) > tgt[n.id]);
+        if (!over.length) break;
+        let best = null, bs = -1e9;
+        for (const n of over) for (let d = 0; d < days; d++) {
+          const c = grid[n.id][d]; if (c.lock || c.s !== T) continue;
+          const edge = !W(n.id, d - 1) || !W(n.id, d + 1); if (!edge) continue;
+          const cnt = count(d, T); if (cnt <= minOf[T]) continue;
+          let sc = cnt * 2 + runAt(n.id, d) * 0.5 + R() * 0.3 + (shifts(n.id) - tgt[n.id]);
+          if (!W(n.id, d - 1) && !W(n.id, d + 1)) sc += 3; // lone shift — drop first
+          if (sc > bs) { bs = sc; best = [n.id, d]; }
+        }
+        if (!best) break;
+        grid[best[0]][best[1]] = { s: 'O' };
+      }
+      // fill short: extend blocks at edges, lowest-covered days first
+      for (let guard = 0; guard < 400; guard++) {
+        const under = team.filter(n => shifts(n.id) < tgt[n.id]);
+        if (!under.length) break;
+        let best = null, bs = -1e9;
+        for (const n of under) for (let d = 0; d < days; d++) {
+          if (!canAdd(n.id, d, T, mc)) continue;
+          const edge = W(n.id, d - 1) || W(n.id, d + 1);
+          let sc = -count(d, T) * 2 + (edge ? 3 : 0) + R() * 0.3;
+          const ob = offLen(n.id, d, -1), of = offLen(n.id, d, 1);
+          if ((d - ob > 0 && ob < minOff) || (d + of < days - 1 && of < minOff)) sc -= 2.5;
+          if (sc > bs) { bs = sc; best = [n.id, d]; }
+        }
+        if (!best) break;
+        grid[best[0]][best[1]] = { s: T };
+      }
+    });
+
+    // coverage repair: same team overtime first (or cross-cover), extending blocks
+    for (let d = 0; d < days; d++) for (const T of ['D', 'N']) {
+      while (count(d, T) < minOf[T]) {
+        const team = nurses.filter(n => n.team === T), other = nurses.filter(n => n.team !== T);
+        const pools = cfg.gapFill === 'cross' ? [other, team] : [team, other];
+        let pick = null;
+        for (const lim of [mc, mc + 1]) {
+          for (const pool of pools) {
+            const c = pool.filter(n => canAdd(n.id, d, T, lim));
+            if (!c.length) continue;
+            const under = n => shifts(n.id) < tgt[n.id] ? 1 : 0;
+            c.sort((a, b) => (under(b) - under(a)) || (ot[a.id] - ot[b.id]) || ((W(b.id, d - 1) || W(b.id, d + 1)) - (W(a.id, d - 1) || W(a.id, d + 1))) || (R() - 0.5));
+            pick = c[0]; break;
+          }
+          if (pick) break;
+        }
+        if (!pick) break;
+        const isOT = shifts(pick.id) >= tgt[pick.id];
+        grid[pick.id][d] = { s: T, ot: isOT, x: pick.team !== T };
+        if (isOT) ot[pick.id]++;
+      }
+    }
+    // charge-nurse nudge: swap a non-CN with an off CN teammate where it keeps blocks legal
+    if (hasCN) for (let d = 0; d < days; d++) for (const T of ['D', 'N']) {
+      const on = nurses.filter(n => grid[n.id][d].s === T);
+      if (!on.length || on.some(n => /CN/.test(n.grade || ''))) continue;
+      const isCN = n => /CN/.test(n.grade || '');
+      const nc = on.filter(n => !grid[n.id][d].lock && !grid[n.id][d].ot);
+      let done = false;
+      for (const a of nc) { if (done) break;
+        for (const c of nurses.filter(n => n.team === T && isCN(n))) { if (done) break;
+          // exchange: c takes day d, a takes one of c's days d2 (which keeps another CN)
+          for (let d2 = 0; d2 < days && !done; d2++) {
+            if (d2 === d || grid[c.id][d2].s !== T || grid[c.id][d2].lock || grid[a.id][d2].s !== 'O' || grid[a.id][d2].lock) continue;
+            if (!nurses.some(n => n !== c && isCN(n) && grid[n.id][d2].s === T)) continue;
+            const edgeC2 = !W(c.id, d2 - 1) || !W(c.id, d2 + 1);           // c loses a block edge, not a middle
+            const adjCd = W(c.id, d - 1) || W(c.id, d + 1);               // c extends a block
+            const adjA2 = W(a.id, d2 - 1) || W(a.id, d2 + 1);             // a extends a block
+            const edgeAd = !W(a.id, d - 1) || !W(a.id, d + 1);            // a loses an edge
+            if (!(edgeC2 && adjCd && adjA2 && edgeAd)) continue;
+            const sa = grid[a.id][d], sc2 = grid[c.id][d2];
+            grid[a.id][d] = { s: 'O' }; grid[c.id][d2] = { s: 'O' };
+            if (canAdd(c.id, d, T, mc) && canAdd(a.id, d2, T, mc)) { grid[c.id][d] = { s: T }; grid[a.id][d2] = { s: T }; done = true; }
+            else { grid[a.id][d] = sa; grid[c.id][d2] = sc2; }
+          }
+        }
+      }
+    }
+    return grid;
+  }
+
   function validate(ward, grid, cfg, wardLocks) {
     const days = daysIn(cfg.year, cfg.month);
     const nurses = ward.nurses.filter(n => n.on && grid[n.id]);
@@ -409,10 +541,18 @@ const DEFAULT_WARDS = () => ([
     ['n13','ريمي','','N'],['n14','زينة','','N'],['n15','نحول','','N']
   ].map(([id,name,grade,team])=>({id,name,grade,team,on:true})) }
 ]);
-const DEFAULT_CFG = () => ({ year:2026, month:11, targetHours:176, shiftLen:12, maxConsec:3, blockPref:2, gapFill:'ot', alCredit:8, dayStart:7 });
+const PRESETS = [
+  { k:'p5', no:1, name:'Long Break 5', sub:'5 on · 5 off', f:{block:5,maxConsec:5,minOff:4,blockPref:5}, note:'Longest time off · 60h runs' },
+  { k:'p4', no:2, name:'Long Break 4', sub:'4 on · 4 off', f:{block:4,maxConsec:4,minOff:3,blockPref:4}, note:'Long breaks · 48h runs' },
+  { k:'p3', no:3, name:'Balanced 3', sub:'3 on · 3 off', f:{block:3,maxConsec:3,minOff:2,blockPref:3}, note:'Even rhythm · 36h runs' },
+  { k:'flex', no:4, name:'Flexible', sub:'2–3 on · short offs', f:{block:0,maxConsec:3,minOff:0,blockPref:2}, note:'Most spread out' }
+];
+const presetCfg = (base,k) => Object.assign({}, base, (PRESETS.find(p=>p.k===k)||PRESETS[0]).f, {preset:k});
+const DEFAULT_CFG = () => presetCfg({ year:2026, month:11, targetHours:176, shiftLen:12, gapFill:'ot', alCredit:8, dayStart:7 }, 'p5');
 
 const MIG={"Majid": "ماجد", "Adnan": "عدنان", "Sinbad": "سندباد", "Conan": "كونان", "Gon": "غون", "Grendizer": "غرندايزر", "Mowgli": "ماوكلي", "Agumon": "أغومون", "Hamtaro": "هامتارو", "Lina": "لينا", "Sally": "سالي", "Ran": "ران", "Remi": "ريمي", "Zina": "زينة", "Nahool": "نحول", "Machamp": "ماجد", "Meowth": "عدنان", "Espeon": "سندباد", "Eevee": "كونان", "Greninja": "غون", "Mewtwo": "غرندايزر", "Pikachu": "ماوكلي", "Squirtle": "أغومون", "Gengar": "هامتارو", "Psyduck": "لينا", "Sylveon": "سالي", "Onix": "ران", "Cubone": "ريمي", "Blastoise": "زينة", "Alakazam": "نحول"};
 let S = (load()&&migrate(load())) || { cfg:DEFAULT_CFG(), wards:DEFAULT_WARDS(), months:{}, view:'men', selDay:null };
+if(!S.cfg.preset){ S.cfg=presetCfg(S.cfg,'p5'); Object.values(S.months||{}).forEach(m=>{ m.grids=null; m.options=[]; m.idx=-1; }); }
 function migrate(o){ try{ (o.wards||[]).forEach(w=>w.nurses.forEach(n=>{ if(MIG[n.name]) n.name=MIG[n.name]; })); }catch(e){} return o; }
 function load(){ try{ const t=localStorage.getItem(STORE); return t?JSON.parse(t):null; }catch(e){ return null; } }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){} }
@@ -425,11 +565,16 @@ function M(){ // month record
   if (!S.months[k]) S.months[k] = { locks:{men:{},women:{}}, options:[], idx:-1, grids:null };
   return S.months[k];
 }
-function score(g){ let e=0,w=0,ot=0; S.wards.forEach(wd=>{ const v=Engine.validate(wd,g[wd.key],S.cfg,M().locks[wd.key]); v.issues.forEach(i=>{ if(i.lvl==='error')e++; else if(i.lvl==='warn')w++; }); Object.values(v.stats).forEach(s=>{ if(s.diff>=S.cfg.shiftLen) ot+=s.diff; }); }); return e*1000+w*10+ot/100; }
-function build(seed){ const g={}; S.wards.forEach(wd=>{ g[wd.key]=Engine.generateWard(wd,S.cfg,M().locks[wd.key],seed); }); return g; }
-function findOption(start){
+function score(g,cfg=S.cfg){ let e=0,w=0,ot=0; S.wards.forEach(wd=>{ const v=Engine.validate(wd,g[wd.key],cfg,M().locks[wd.key]); v.issues.forEach(i=>{ if(i.lvl==='error')e++; else if(i.lvl==='warn')w++; }); Object.values(v.stats).forEach(s=>{ if(s.diff>=cfg.shiftLen) ot+=s.diff; }); }); return e*1000+w*10+frag(g,cfg)*3+ot/100; }
+function frag(g,cfg){ if(!cfg.block) return 0; const n=days(); let f=0;
+  S.wards.forEach(w=>w.nurses.filter(x=>x.on&&g[w.key][x.id]).forEach(x=>{ const r=g[w.key][x.id].map(c=>c.s==='D'||c.s==='N'); let i=0; const seg=[];
+    while(i<n){ let j=i; while(j<n&&r[j]===r[i]) j++; seg.push([r[i],j-i]); i=j; }
+    seg.forEach((sg,ix)=>{ const inner=ix>0&&ix<seg.length-1; if(sg[0]&&sg[1]===1&&inner) f+=2; if(!sg[0]&&inner&&sg[1]<cfg.minOff) f+=cfg.minOff-sg[1]; }); }));
+  return f; }
+function build(seed,cfg=S.cfg){ const g={}; S.wards.forEach(wd=>{ g[wd.key]=Engine.generateWard(wd,cfg,M().locks[wd.key],seed); }); return g; }
+function findOption(start,cfg=S.cfg){
   let best=null,bs=1e9;
-  for(let s=start;s<start+40;s++){ const g=build(s); const sc=score(g); if(sc<bs){bs=sc;best={seed:s,g};} if(sc<1) break; }
+  for(let s=start;s<start+30;s++){ const g=build(s,cfg); const sc=score(g,cfg); if(sc<bs){bs=sc;best={seed:s,g};} if(sc<0.5) break; }
   return best;
 }
 function newOption(){
@@ -513,6 +658,28 @@ function gridTable(k,v,a,b,stats,fit){
   return h+`</tfoot></table>`;
 }
 const NMW=74;
+const statCache={};
+function breakStats(g,cfg){
+  const n=days(); let offs=[], runs=[], ot=0, prob=0;
+  S.wards.forEach(w=>{ const v=Engine.validate(w,g[w.key],cfg,M().locks[w.key]); prob+=v.issues.filter(i=>i.lvl!=='info').length;
+    Object.values(v.stats).forEach(s=>{ ot+=Math.max(0,s.hours-Math.ceil(s.req/cfg.shiftLen)*cfg.shiftLen)/cfg.shiftLen; });
+    w.nurses.filter(x=>x.on&&g[w.key][x.id]).forEach(x=>{ const r=g[w.key][x.id].map(c=>c.s==='D'||c.s==='N'); let i=0; const seg=[];
+      while(i<n){ let j=i; while(j<n&&r[j]===r[i]) j++; seg.push([r[i],j-i]); i=j; }
+      seg.forEach((sg,ix)=>{ if(sg[0]) runs.push(sg[1]); else if(ix>0&&ix<seg.length-1) offs.push(sg[1]); }); }); });
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+  return { avgOff:avg(offs), minOff:offs.length?Math.min(...offs):0, maxRun:runs.length?Math.max(...runs):0, ot, prob };
+}
+function patternCards(){
+  const sig=mk()+JSON.stringify([S.wards,M().locks,S.cfg.targetHours,S.cfg.gapFill,S.cfg.alCredit]);
+  if(!statCache[sig]){ statCache[sig]={}; PRESETS.forEach(p=>{ const cfg=presetCfg(S.cfg,p.k); const o=findOption(1,cfg); statCache[sig][p.k]=breakStats(o.g,cfg); }); }
+  const st=statCache[sig];
+  return `<div class="pcards">${PRESETS.map(p=>{ const x=st[p.k], on=S.cfg.preset===p.k;
+    return `<button class="pcard ${on?'on':''}" data-a="preset" data-val="${p.k}">
+      <div class="pno">${p.no}</div><div class="pname">${p.name}</div><div class="psub">${p.sub}</div>
+      <div class="pstat"><b>${x.avgOff.toFixed(1)}</b> days off between runs<br>shortest break ${x.minOff} · longest run ${x.maxRun}</div>
+      <div class="pfoot">${x.prob?`<span class="pbad">⚠ ${x.prob}</span>`:'<span class="pok">✓ covered</span>'} ${x.ot?`· ${x.ot} OT`:''}</div>
+      <div class="pnote">${p.note}</div></button>`; }).join('')}</div>`;
+}
 function rosterView(k,v){
   const w=ward(k), m=M(), g=m.grids[k], n=days(), y=S.cfg.year, mo=S.cfg.month;
   const errs=v.issues.filter(i=>i.lvl==='error').length, warns=v.issues.filter(i=>i.lvl==='warn').length;
@@ -521,7 +688,7 @@ function rosterView(k,v){
   const today=new Date(); const tIdx=(today.getFullYear()===y&&today.getMonth()===mo)?today.getDate()-1:-1;
   let h=`<div class="card"><div class="bar">${st}${optionBar()}</div>
   <div class="bar" style="margin-bottom:8px"><span class="sub">Base ${Math.ceil(S.cfg.targetHours/L)} × ${L}h = ${Math.ceil(S.cfg.targetHours/L)*L}h each (target ${S.cfg.targetHours}h)${xs?` · <b style="color:var(--ot)">${xs} extra OT shift${xs>1?'s':''} (${xs*L}h)</b>`:' · no extra OT'}</span>
-  <span style="display:flex;gap:6px"><button class="btn" data-a="rebuild">Rebuild</button><button class="btn pri" data-a="export">Share / Export</button></span></div>`;
+  <span style="display:flex;gap:6px"><button class="btn" data-a="rebuild">Rebuild</button><button class="btn pri" data-a="export">Share / Export</button></span></div>`+patternCards();
   const mode='wide';
   if(mode==='wide'){ h+=`<div class="scroller">`+gridTable(k,v,0,n,true,false)+`</div>`; }
   else {
@@ -577,8 +744,7 @@ function settingsView(){
   let h=`<div class="card"><h3>Rules</h3>
   <div class="row"><label>Monthly target hours</label>${stepper('tgt',c.targetHours)}<span class="sub">→ ${Math.ceil(c.targetHours/c.shiftLen)} shifts = ${Math.ceil(c.targetHours/c.shiftLen)*c.shiftLen}h</span></div>
   <div class="row"><label>Shift start (day)</label><span class="seg">${[6,7,8].map(x=>`<button data-a="start" data-val="${x}" class="${c.dayStart===x?'on':''}">${fmtH(x)}</button>`).join('')}</span></div>
-  <div class="row"><label>Max shifts in a row</label><span class="seg">${[2,3,4].map(x=>`<button data-a="mc" data-val="${x}" class="${c.maxConsec===x?'on':''}">${x}</button>`).join('')}</span></div>
-  <div class="row"><label>Preferred block</label><span class="seg">${[1,2,3].map(x=>`<button data-a="bp" data-val="${x}" class="${c.blockPref===x?'on':''}">${x} on</button>`).join('')}</span></div>
+  <div class="row"><label>Shift pattern</label><span class="seg">${PRESETS.map(p=>`<button data-a="preset" data-val="${p.k}" class="${c.preset===p.k?'on':''}">${p.no} · ${p.sub.split(' · ')[0]}</button>`).join('')}</span></div>
   <div class="row"><label>If a shift is short</label><span class="seg"><button data-a="gap" data-val="ot" class="${c.gapFill==='ot'?'on':''}">Overtime (same team)</button><button data-a="gap" data-val="cross" class="${c.gapFill==='cross'?'on':''}">Cross-cover first</button></span></div>
   <div class="row"><label>Leave credit per AL day</label><span class="seg">${[0,8,12].map(x=>`<button data-a="alc" data-val="${x}" class="${c.alCredit===x?'on':''}">${x}h</button>`).join('')}</span></div>
   </div>`;
@@ -686,6 +852,7 @@ document.addEventListener('click',e=>{
     case 'tgt': S.cfg.targetHours=Math.max(12,S.cfg.targetHours+dv*4); break;
     case 'start': S.cfg.dayStart=+val; rebuild=false; break;
     case 'layout': S.cfg.layout=val; rebuild=false; break;
+    case 'preset': { S.cfg=presetCfg(S.cfg,val); const mm=M(); mm.options=[]; mm.idx=-1; mm.grids=null; newOption(); rebuild=false; const p=PRESETS.find(q=>q.k===val); toast(`${p.no} · ${p.name}`); break; }
     case 'mc': S.cfg.maxConsec=+val; break;
     case 'bp': S.cfg.blockPref=+val; break;
     case 'gap': S.cfg.gapFill=val; break;

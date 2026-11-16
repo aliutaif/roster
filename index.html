@@ -80,6 +80,19 @@ tfoot td.low{color:#fff;background:var(--err)}
 .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mute);margin-top:10px}
 .legend i{display:inline-block;width:16px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:4px}
 .hint{font-size:12px;color:var(--mute);margin-top:6px}
+.fitwrap{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:10px}
+table.fit{table-layout:fixed;width:100%;min-width:0}
+.fit th.dh{width:auto;min-width:0;font-size:var(--fs);height:30px;padding:0}
+.fit th.dh small{font-size:8px}
+.fit .nm{position:static;min-width:0;max-width:none;padding:2px 4px 2px 6px;font-size:12px;height:36px;line-height:1.35}
+.fit .nm bdi{display:block;overflow:hidden;text-overflow:ellipsis}
+.fit .nm .nh{font-size:9.5px;line-height:1.2;color:var(--mute);font-weight:400;white-space:nowrap;overflow:hidden}
+.fit td.c{width:auto;min-width:0;height:36px}
+.fit .c span{width:auto;height:24px;margin:0 1px;border-radius:4px;font-size:var(--fs)}
+.fit tfoot td{font-size:var(--fs);height:24px;letter-spacing:-.3px}
+.fit .teamhdr td{padding:3px 6px;font-size:10.5px}
+.fit .lk::after{top:3px;right:2px;width:4px;height:4px}
+.fit .ot span{box-shadow:inset 0 0 0 2px var(--ot)}
 /* day view */
 .days{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
 .days::-webkit-scrollbar{display:none}
@@ -388,12 +401,12 @@ const STORE = 'azm-12h-roster-v1';
 
 const DEFAULT_WARDS = () => ([
   { key:'men', label:"Men's ward", minD:2, minN:2, nurses:[
-    ['awad','Majid','CN2','D'],['bader','Adnan','CN1','D'],['alganem','Sinbad','','D'],['fares','Conan','CN1','D'],['haitham','Gon','','D'],
-    ['assaf','Grendizer','CN2','N'],['ali','Mowgli','CN1','N'],['alm','Agumon','','N'],['abdulrahman','Hamtaro','CN2','N']
+    ['awad','ماجد','CN2','D'],['bader','عدنان','CN1','D'],['alganem','سندباد','','D'],['fares','كونان','CN1','D'],['haitham','غون','','D'],
+    ['assaf','غرندايزر','CN2','N'],['ali','ماوكلي','CN1','N'],['alm','أغومون','','N'],['abdulrahman','هامتارو','CN2','N']
   ].map(([id,name,grade,team])=>({id,name,grade,team,on:true})) },
   { key:'women', label:"Women's ward", minD:1, minN:1, nurses:[
-    ['aysha','Lina','','D'],['sara','Sally','','D'],['taif','Ran','','D'],
-    ['atheer','Remi','','N'],['yara','Zina','','N'],['lama','Nahool','','N']
+    ['aysha','لينا','','D'],['sara','سالي','','D'],['taif','ران','','D'],
+    ['atheer','ريمي','','N'],['yara','زينة','','N'],['lama','نحول','','N']
   ].map(([id,name,grade,team])=>({id,name,grade,team,on:true})) }
 ]);
 const DEFAULT_CFG = () => ({ year:2026, month:11, targetHours:176, shiftLen:12, maxConsec:3, blockPref:2, gapFill:'ot', alCredit:8, dayStart:7 });
@@ -460,6 +473,44 @@ function optionBar(){
   <button class="ib" data-a="optNext" aria-label="Next option">›</button></div>`;
 }
 
+function layoutSeg(){ const l=S.cfg.layout||'month';
+  return `<div class="bar" style="margin:0 0 8px"><span class="seg">${[['month','Whole month'],['half','Two halves'],['wide','Wide']].map(([k,t])=>`<button data-a="layout" data-val="${k}" class="${l===k?'on':''}">${t}</button>`).join('')}</span></div>`; }
+function gridTable(k,v,a,b,stats,fit){
+  const w=ward(k), m=M(), g=m.grids[k], y=S.cfg.year, mo=S.cfg.month, n=b-a;
+  const today=new Date(); const tIdx=(today.getFullYear()===y&&today.getMonth()===mo)?today.getDate()-1:-1;
+  let cw=99;
+  if(fit){ const avail=Math.max(260,($('#main').clientWidth||360)-26); cw=(avail-NMW)/n; }
+  const letters=cw>=13, wdays=cw>=15;
+  let h=`<table class="${fit?'fit':''}" style="${fit?`--fs:${cw>=17?11:cw>=13?9.5:8}px`:''}">${fit?`<colgroup><col style="width:${NMW}px">${'<col>'.repeat(n)}</colgroup>`:''}<thead><tr><th class="nm">${fit?(a===0?`Days ${a+1}–${b}`:`Days ${a+1}–${b}`):esc(w.label)}</th>`;
+  for(let d=a;d<b;d++){ const we=Engine.isWeekend(y,mo,d); const num=(!fit||cw>=11||d%2===0)?d+1:''; h+=`<th class="dh ${we?'we':''} ${d===tIdx?'today':''}">${num}${wdays||!fit?`<small>${WD[Engine.dow(y,mo,d)]}</small>`:''}</th>`; }
+  if(stats) h+=`<th class="st">D</th><th class="st">N</th><th class="st">Hrs</th><th class="st">±${S.cfg.targetHours}</th>`;
+  h+=`</tr></thead><tbody>`;
+  for(const T of ['D','N']){
+    const team=w.nurses.filter(x=>x.on&&x.team===T);
+    if(!team.length) continue;
+    h+=`<tr class="teamhdr"><td class="nm">${T==='D'?'☀ Day':'☾ Night'}${fit?'':' team'}</td><td colspan="${n+(stats?4:0)}"></td></tr>`;
+    for(const nu of team){
+      const row=g[nu.id], s=v.stats[nu.id];
+      const cls=s.diff<0?'neg':s.diff>=S.cfg.shiftLen?'big':'pos';
+      h+=`<tr><td class="nm"><bdi>${esc(nu.name)}</bdi>${nu.grade&&!fit?`<span class="g">${esc(nu.grade)}</span>`:''}${fit?`<div class="nh">${s.hours}h <span class="${cls}">${s.diff>0?'+':''}${s.diff}</span>${nu.grade?` · ${esc(nu.grade)}`:''}</div>`:''}</td>`;
+      for(let d=a;d<b;d++){ const c=row[d]; const we=Engine.isWeekend(y,mo,d);
+        const lab=c.s==='O'?(letters?'·':''):(letters?(c.s==='AL'&&cw<17?'L':c.s):'');
+        h+=`<td class="c s-${c.s} ${c.ot?'ot':''} ${(c.s==='D'||c.s==='N')&&c.s!==nu.team?'x':''} ${c.lock?'lk':''} ${we?'we':''}" data-w="${k}" data-n="${nu.id}" data-d="${d}"><span>${lab}</span></td>`; }
+      if(stats) h+=`<td class="st">${s.D}</td><td class="st">${s.N}</td><td class="st h">${s.hours}</td><td class="st ${cls}">${s.diff>0?'+':''}${s.diff}</td>`;
+      h+=`</tr>`;
+    }
+  }
+  h+=`</tbody><tfoot>`;
+  for(const T of ['D','N']){
+    const min=T==='D'?w.minD:w.minN;
+    h+=`<tr><td class="nm">${T==='D'?(fit?'☀ on':'Day on duty'):(fit?'☾ on':'Night on duty')}</td>`;
+    for(let d=a;d<b;d++){ const c=w.nurses.filter(x=>x.on&&g[x.id]&&g[x.id][d].s===T).length; h+=`<td class="${c<min?'low':''}">${c}</td>`; }
+    if(stats) h+=`<td colspan="4"></td>`;
+    h+=`</tr>`;
+  }
+  return h+`</tfoot></table>`;
+}
+const NMW=74;
 function rosterView(k,v){
   const w=ward(k), m=M(), g=m.grids[k], n=days(), y=S.cfg.year, mo=S.cfg.month;
   const errs=v.issues.filter(i=>i.lvl==='error').length, warns=v.issues.filter(i=>i.lvl==='warn').length;
@@ -468,32 +519,15 @@ function rosterView(k,v){
   const today=new Date(); const tIdx=(today.getFullYear()===y&&today.getMonth()===mo)?today.getDate()-1:-1;
   let h=`<div class="card"><div class="bar">${st}${optionBar()}</div>
   <div class="bar" style="margin-bottom:8px"><span class="sub">Base ${Math.ceil(S.cfg.targetHours/L)} × ${L}h = ${Math.ceil(S.cfg.targetHours/L)*L}h each (target ${S.cfg.targetHours}h)${xs?` · <b style="color:var(--ot)">${xs} extra OT shift${xs>1?'s':''} (${xs*L}h)</b>`:' · no extra OT'}</span>
-  <span style="display:flex;gap:6px"><button class="btn" data-a="rebuild">Rebuild</button><button class="btn pri" data-a="export">Share / Export</button></span></div>
-  <div class="scroller"><table><thead><tr><th class="nm">${esc(w.label)}</th>`;
-  for(let d=0;d<n;d++){ const we=Engine.isWeekend(y,mo,d); h+=`<th class="dh ${we?'we':''} ${d===tIdx?'today':''}">${d+1}<small>${WD[Engine.dow(y,mo,d)]}</small></th>`; }
-  h+=`<th class="st">D</th><th class="st">N</th><th class="st">Hrs</th><th class="st">±${S.cfg.targetHours}</th></tr></thead><tbody>`;
-  for(const T of ['D','N']){
-    const team=w.nurses.filter(x=>x.on&&x.team===T);
-    if(!team.length) continue;
-    h+=`<tr class="teamhdr"><td class="nm">${T==='D'?'☀ Day team':'☾ Night team'}</td><td colspan="${n+4}"></td></tr>`;
-    for(const nu of team){
-      const row=g[nu.id], s=v.stats[nu.id];
-      h+=`<tr><td class="nm">${esc(nu.name)}${nu.grade?`<span class="g">${esc(nu.grade)}</span>`:''}</td>`;
-      for(let d=0;d<n;d++){ const c=row[d]; const we=Engine.isWeekend(y,mo,d);
-        const lab=c.s==='O'?'·':c.s;
-        h+=`<td class="c s-${c.s} ${c.ot?'ot':''} ${(c.s==='D'||c.s==='N')&&c.s!==nu.team?'x':''} ${c.lock?'lk':''} ${we?'we':''}" data-w="${k}" data-n="${nu.id}" data-d="${d}"><span>${lab}</span></td>`; }
-      const cls=s.diff<0?'neg':s.diff>=S.cfg.shiftLen?'big':'pos';
-      h+=`<td class="st">${s.D}</td><td class="st">${s.N}</td><td class="st h">${s.hours}</td><td class="st ${cls}">${s.diff>0?'+':''}${s.diff}</td></tr>`;
-    }
+  <span style="display:flex;gap:6px"><button class="btn" data-a="rebuild">Rebuild</button><button class="btn pri" data-a="export">Share / Export</button></span></div>`;
+  h+=layoutSeg();
+  const mode=S.view==='print'?'wide':(S.cfg.layout||'month');
+  if(mode==='wide'){ h+=`<div class="scroller">`+gridTable(k,v,0,n,true,false)+`</div>`; }
+  else {
+    const per=mode==='half'?Math.ceil(n/2):n;
+    for(let a=0;a<n;a+=per) h+=`<div class="fitwrap">`+gridTable(k,v,a,Math.min(n,a+per),false,true)+`</div>`;
   }
-  h+=`</tbody><tfoot>`;
-  for(const T of ['D','N']){
-    const min=T==='D'?w.minD:w.minN;
-    h+=`<tr><td class="nm">${T==='D'?'Day on duty':'Night on duty'}</td>`;
-    for(let d=0;d<n;d++){ const c=w.nurses.filter(x=>x.on&&g[x.id]&&g[x.id][d].s===T).length; h+=`<td class="${c<min?'low':''}">${c}</td>`; }
-    h+=`<td colspan="4"></td></tr>`;
-  }
-  h+=`</tfoot></table></div>
+  h+=`
   <div class="legend"><span><i style="background:var(--d-bg)"></i>Day 12h</span><span><i style="background:var(--n-bg)"></i>Night 12h</span><span><i style="background:var(--al-bg)"></i>Annual leave</span><span><i style="box-shadow:0 0 0 2px var(--ot)"></i>Overtime shift</span><span><i style="outline:2px dashed var(--accent);outline-offset:-2px"></i>Cross-cover</span><span><i style="background:var(--we)"></i>Fri/Sat</span><span>● edited (kept on rebuild)</span></div>
   <div class="hint">Tap any cell to change it. Edits and leave stay fixed when you rebuild or flip options; everything else re-balances to hit ${S.cfg.targetHours}h.</div></div>`;
   return h;
@@ -650,6 +684,7 @@ document.addEventListener('click',e=>{
       return; }
     case 'tgt': S.cfg.targetHours=Math.max(12,S.cfg.targetHours+dv*4); break;
     case 'start': S.cfg.dayStart=+val; rebuild=false; break;
+    case 'layout': S.cfg.layout=val; rebuild=false; break;
     case 'mc': S.cfg.maxConsec=+val; break;
     case 'bp': S.cfg.blockPref=+val; break;
     case 'gap': S.cfg.gapFill=val; break;
@@ -676,6 +711,7 @@ document.addEventListener('change',e=>{
   save(); render();
 });
 
+let rz; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(S.view==='men'||S.view==='women') render(); },150); });
 render();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 })();
